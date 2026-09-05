@@ -13,7 +13,7 @@ from flask import Flask, render_template, request
 app = Flask(__name__)
 
 LOG_PATH = Path(os.environ.get("LOG_PATH", "/var/log/honeypot/http.json"))
-LISTEN_HOST = os.environ.get("LISTEN_HOST", "0.0.0.0")
+LISTEN_HOST = os.environ.get("LISTEN_HOST", "127.0.0.1")
 LISTEN_PORT = int(os.environ.get("PORT", "80"))
 
 SQLI_HINT = re.compile(
