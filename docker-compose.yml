@@ -1,0 +1,63 @@
+# Track A lab — isolated decoy services.
+# Ports are bound to 127.0.0.1 so this is not reachable on campus Wi-Fi.
+
+name: deception-honeypot
+
+services:
+  flask-honeypot:
+    build:
+      context: ./services/flask-honeypot
+    container_name: hp-flask
+    restart: unless-stopped
+    environment:
+      PORT: "80"
+      LOG_PATH: /var/log/honeypot/http.json
+    ports:
+      - "127.0.0.1:8080:80"
+    volumes:
+      - ./data/flask:/var/log/honeypot
+    networks:
+      honeypot_net:
+        ipv4_address: 172.28.0.10
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1/health')"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+
+  cowrie:
+    image: cowrie/cowrie:latest
+    container_name: hp-cowrie
+    restart: unless-stopped
+    environment:
+      COWRIE_HONEYPOT_HOSTNAME: jumpbox-01
+      COWRIE_HONEYPOT_SENSOR: northstar-ssh
+    ports:
+      - "127.0.0.1:2222:2222"
+    volumes:
+      - ./data/cowrie/log:/cowrie/cowrie-git/var/log/cowrie
+    networks:
+      honeypot_net:
+        ipv4_address: 172.28.0.11
+
+  dionaea:
+    image: dinotools/dionaea:latest
+    container_name: hp-dionaea
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:2121:21"
+      - "127.0.0.1:1445:445"
+    volumes:
+      - ./data/dionaea/lib:/opt/dionaea/var/lib
+      - ./data/dionaea/log:/opt/dionaea/var/log/dionaea
+    networks:
+      honeypot_net:
+        ipv4_address: 172.28.0.12
+
+networks:
+  honeypot_net:
+    name: honeypot_net
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16

@@ -1,0 +1,15 @@
+.env
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.log
+.DS_Store
+Thumbs.db
+
+# Captured attacker data — never commit
+data/flask/*.json
+data/cowrie/log/*
+data/dionaea/log/*
+data/dionaea/lib/*
+!data/**/.gitkeep
