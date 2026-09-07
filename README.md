@@ -95,7 +95,6 @@ bash scripts/export-logs.sh
 Remote is already `https://github.com/PrishaNagpal/deception-honeypot.git`.  
 Add teammates: repo **Settings → Collaborators**.
 
-Commit from your own terminal so Cursor is not listed as a co-author.
 
 ## For Track B
 
