@@ -18,6 +18,8 @@ Parser should tail these files and emit one record per JSON line.
 }
 ```
 
+Signup POSTs to `/signup` include `email` and `tags: ["http_signup"]`.
+
 `tags` may also include `sqli_like` or `oversized_payload`.
 
 ## Cowrie SSH — `data/cowrie/log/cowrie.json`

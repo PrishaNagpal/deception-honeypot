@@ -23,14 +23,23 @@ Multi-service lab for the Computer Networks project: fake SSH (Cowrie), fake HTT
 
 Host ports are not 22/80/445 so they do not collide with Windows or a real SSH daemon.
 
-## Run the full lab (Docker)
+## Run the full lab (free Docker Engine in Ubuntu WSL)
 
-1. Install [Docker Desktop for Windows](https://docs.docker.com/desktop/setup/install/windows-install/) and wait until it says running.
-2. In this folder:
+Do **not** pay for Docker Desktop. This course lab uses the free Docker Engine inside Ubuntu.
+
+From PowerShell:
 
 ```powershell
-docker compose up -d --build
-docker compose ps
+wsl -d Ubuntu-24.04
+```
+
+Then inside Ubuntu:
+
+```bash
+cd /mnt/c/Users/LENOVO/deception-honeypot
+sudo service docker start
+sudo docker compose up -d --build
+sudo docker compose ps
 ```
 
 3. Open http://127.0.0.1:8080, submit a fake login, then open `data/flask/http.json`.

@@ -35,12 +35,12 @@ def append_json(record: dict) -> None:
         handle.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
-def tags_for(username: str, password: str) -> list[str]:
-    blob = f"{username} {password}"
-    tags = ["http_login"]
+def tags_for(*parts: str, extra: list[str] | None = None) -> list[str]:
+    blob = " ".join(parts)
+    tags = list(extra or [])
     if SQLI_HINT.search(blob):
         tags.append("sqli_like")
-    if len(password) > 64:
+    if any(len(part) > 64 for part in parts):
         tags.append("oversized_payload")
     return tags
 
@@ -63,10 +63,40 @@ def login():
         "username": username,
         "password": password,
         "user_agent": request.headers.get("User-Agent", ""),
-        "tags": tags_for(username, password),
+        "tags": tags_for(username, password, extra=["http_login"]),
     }
     append_json(record)
     return render_template("login.html", error="Invalid username or password."), 401
+
+
+@app.get("/signup")
+def signup_form():
+    return render_template("signup.html", error=None, notice=None)
+
+
+@app.post("/signup")
+def signup():
+    username = request.form.get("username", "")[:256]
+    email = request.form.get("email", "")[:256]
+    password = request.form.get("password", "")[:1024]
+    record = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "service": "flask-http",
+        "src_ip": client_ip(),
+        "method": "POST",
+        "path": "/signup",
+        "username": username,
+        "email": email,
+        "password": password,
+        "user_agent": request.headers.get("User-Agent", ""),
+        "tags": tags_for(username, email, password, extra=["http_signup"]),
+    }
+    append_json(record)
+    notice = (
+        "Account request submitted. An administrator must approve access "
+        "before you can sign in."
+    )
+    return render_template("signup.html", error=None, notice=notice), 202
 
 
 @app.get("/health")

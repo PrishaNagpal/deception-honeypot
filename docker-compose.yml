@@ -35,7 +35,8 @@ services:
     ports:
       - "127.0.0.1:2222:2222"
     volumes:
-      - ./data/cowrie/log:/cowrie/cowrie-git/var/log/cowrie
+      # Linux named volume — Windows bind mounts deny Cowrie's log user.
+      - cowrie_logs:/cowrie/cowrie-git/var/log/cowrie
     networks:
       honeypot_net:
         ipv4_address: 172.28.0.11
@@ -48,11 +49,16 @@ services:
       - "127.0.0.1:2121:21"
       - "127.0.0.1:1445:445"
     volumes:
-      - ./data/dionaea/lib:/opt/dionaea/var/lib
-      - ./data/dionaea/log:/opt/dionaea/var/log/dionaea
+      - dionaea_lib:/opt/dionaea/var/lib
+      - dionaea_logs:/opt/dionaea/var/log/dionaea
     networks:
       honeypot_net:
         ipv4_address: 172.28.0.12
+
+volumes:
+  cowrie_logs:
+  dionaea_lib:
+  dionaea_logs:
 
 networks:
   honeypot_net:

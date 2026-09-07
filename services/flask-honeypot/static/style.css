@@ -110,8 +110,24 @@ button {
   cursor: pointer;
 }
 
-.hint {
+.banner-ok {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.switch {
   margin: 16px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.switch a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.hint {
+  margin: 12px 0 0;
   color: var(--muted);
   font-size: 12px;
 }
