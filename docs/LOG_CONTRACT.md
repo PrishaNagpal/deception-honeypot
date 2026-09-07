@@ -1,12 +1,14 @@
-# JSON log contract for Track B (log_parser.py)
+# JSON log contract for Track B (`log_parser.py`)
 
-Parser should tail these files and emit one record per JSON line.
+One JSON object per line. Do not rename these paths without a team sync. Track C enrichment keys are `src_ip` and file hashes.
 
 ## Flask HTTP — `data/flask/http.json`
 
+Written live (bind mount). Login example:
+
 ```json
 {
-  "timestamp": "2026-09-05T18:00:00+00:00",
+  "timestamp": "2026-09-07T08:35:42.511483+00:00",
   "service": "flask-http",
   "src_ip": "172.28.0.1",
   "method": "POST",
@@ -18,13 +20,19 @@ Parser should tail these files and emit one record per JSON line.
 }
 ```
 
-Signup POSTs to `/signup` include `email` and `tags: ["http_signup"]`.
+Signup POSTs use `"path": "/signup"`, include `email`, and `tags` contain `http_signup`.
 
 `tags` may also include `sqli_like` or `oversized_payload`.
 
-## Cowrie SSH — `data/cowrie/log/cowrie.json`
+## Cowrie SSH — copy then read `data/cowrie/log/`
 
-Cowrie writes JSON lines. Fields B will care about:
+Cowrie writes inside a Docker volume (Windows bind mounts break its logger). After tests, from Ubuntu:
+
+```bash
+bash scripts/export-logs.sh
+```
+
+Then parse `data/cowrie/log/cowrie.json` (JSON lines). Useful fields:
 
 - `timestamp`
 - `src_ip`
@@ -32,9 +40,7 @@ Cowrie writes JSON lines. Fields B will care about:
 - `message` / `input` for typed commands
 - `eventid` (e.g. `cowrie.login.failed`, `cowrie.command.input`)
 
-## Dionaea FTP/SMB — `data/dionaea/log/` and `data/dionaea/lib/`
+## Dionaea FTP/SMB — same export script
 
-- Connection / protocol events under the log directory
-- Uploaded binaries under the lib/binaries path (hash these files)
-
-Do not change these paths without a team sync. Track C enrichment keys are `src_ip` and file hashes.
+- Events: `data/dionaea/log/`
+- Uploaded binaries: `data/dionaea/lib/` (hash these files)

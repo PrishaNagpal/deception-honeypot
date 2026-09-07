@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Copy container logs into ./data for Track B.
-set -euo pipefail
+# Copy Cowrie/Dionaea logs from Docker volumes into ./data for Track B.
+set -eu
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 mkdir -p "$ROOT/data/cowrie/log" "$ROOT/data/dionaea/log" "$ROOT/data/dionaea/lib"
 sudo docker cp hp-cowrie:/cowrie/cowrie-git/var/log/cowrie/. "$ROOT/data/cowrie/log/" || true
