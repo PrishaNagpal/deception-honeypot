@@ -9,8 +9,16 @@ COPY app.py .
 COPY templates ./templates
 COPY static ./static
 
-ENV PYTHONUNBUFFERED=1
-ENV PORT=80
-EXPOSE 80
+# Unprivileged user. UID 1000 matches the host owner of ./data/flask so the
+# bind-mounted log stays writable.
+RUN useradd --uid 1000 --no-create-home --shell /usr/sbin/nologin honeypot \
+ && mkdir -p /var/log/honeypot \
+ && chown honeypot:honeypot /var/log/honeypot
 
-CMD ["gunicorn", "--bind", "0.0.0.0:80", "--access-logfile", "-", "app:app"]
+ENV PYTHONUNBUFFERED=1
+ENV PORT=8080
+EXPOSE 8080
+
+USER honeypot
+
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--access-logfile", "-", "app:app"]
