@@ -162,3 +162,30 @@ docker restart hp-flask hp-parser
 ```
 
 Check with a fake login on http://127.0.0.1:8080: a new line should appear in `data/flask/http.json`, and a new `http_login` row in `events` within a few seconds.
+
+## Reset before a demo
+
+`scripts/reset-demo.sh` empties the lab: no logs, no captured files, empty tables. It asks you to type `reset` first, because the data cannot be recovered.
+
+```bash
+bash scripts/reset-demo.sh
+```
+
+Logs and database are always cleared together. The log parser resumes from what the database has stored, so emptying only the database would make it import every old log line again, and deleting only the logs would leave old rows behind.
+
+What it does:
+
+1. Stops the stack and removes the containers with their unnamed volumes (Cowrie keeps its terminal recordings, downloaded files and SSH host keys there).
+2. Removes the `cowrie_logs`, `dionaea_logs`, `dionaea_lib` and `pg_data` volumes.
+3. Empties `data/flask/http.json` and deletes the copies under `data/cowrie` and `data/dionaea`. The `.gitkeep` files stay.
+4. Starts everything again. `db/init.sql` recreates the empty tables, and the script waits until every container is running and `hp-db` and `hp-flask` are healthy, then shows the row counts (all 0).
+
+Images and `.env` are kept. AbuseIPDB lookups in `ip_reputation` are deleted too, so they will be fetched again.
+
+Stop a locally running parser (`npm run start:local`) first; the script refuses to run while one is active. `sudo` is only used if some files under `data/` belong to root (for example after `scripts/export-logs.sh`, which copies with `sudo`), and the script says so before using it.
+
+Cowrie gets new SSH host keys. If `ssh` then refuses with "REMOTE HOST IDENTIFICATION HAS CHANGED" or disables password login, remove the old key:
+
+```bash
+ssh-keygen -R '[127.0.0.1]:2222'
+```
