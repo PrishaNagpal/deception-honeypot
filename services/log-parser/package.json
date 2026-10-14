@@ -1,0 +1,19 @@
+{
+  "name": "log-parser",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tails the Flask, Cowrie and Dionaea honeypot logs and writes normalized rows into PostgreSQL.",
+  "main": "src/index.js",
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "test": "jest"
+  },
+  "jest": {
+    "testEnvironment": "node"
+  },
+  "devDependencies": {
+    "jest": "^30.5.2"
+  }
+}
