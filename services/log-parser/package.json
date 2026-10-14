@@ -8,12 +8,18 @@
     "node": "22.x"
   },
   "scripts": {
-    "test": "jest"
+    "test": "jest",
+    "test:db": "node --env-file=../../.env node_modules/jest/bin/jest.js",
+    "start": "node src/index.js",
+    "start:local": "node --env-file=../../.env src/index.js"
   },
   "jest": {
     "testEnvironment": "node"
   },
   "devDependencies": {
     "jest": "^30.5.2"
+  },
+  "dependencies": {
+    "pg": "^8.23.1"
   }
 }
