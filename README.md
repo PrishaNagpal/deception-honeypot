@@ -102,7 +102,7 @@ See `docs/LOG_CONTRACT.md`. Flask logs appear immediately under `data/flask/`. A
 
 ## Log parser
 
-`services/log-parser` (container `hp-parser`) reads the three honeypot logs as they grow and writes one normalized row per attacker action into the `events` table in PostgreSQL (`hp-db`), as described in `db/init.sql`. Files Dionaea captures in its `binaries` folder are hashed into `malware_samples`, and Cowrie download/upload events add their SHA-256 there too.
+`services/log-parser` (container `hp-parser`) reads the three honeypot logs as they grow and writes one normalized row per attacker action into the `events` table in PostgreSQL (`hp-db`), as described in `db/init.sql`. Files Dionaea stores (downloads in `binaries/`, FTP uploads in `ftp/root/`, subfolders included) are hashed into `malware_samples`, and Cowrie download/upload events add their SHA-256 there too.
 
 - It reads the live logs directly: the Cowrie and Dionaea volumes and `./data/flask`, all mounted read-only. No export script is needed.
 - It checks the logs once a second, so new events reach the database within about a second.
@@ -147,6 +147,7 @@ The database tests build the tables from `db/init.sql` in a temporary schema and
 | `COWRIE_LOG` | `/logs/cowrie/cowrie.json` | `data/cowrie/log/cowrie.json` |
 | `DIONAEA_LOG` | `/logs/dionaea/dionaea.json` | `data/dionaea/log/dionaea.json` |
 | `DIONAEA_BINARIES_DIR` | `/logs/dionaea-lib/dionaea/binaries` | `data/dionaea/lib/dionaea/binaries` |
+| `DIONAEA_UPLOADS_DIR` | `/logs/dionaea-lib/dionaea/ftp/root` | `data/dionaea/lib/dionaea/ftp/root` |
 | `POLL_INTERVAL_MS`, `BINARIES_INTERVAL_MS`, `SUMMARY_INTERVAL_MS` | `1000`, `10000`, `60000` | same |
 | `MAX_LINE_BYTES` | `1048576` (longer lines are skipped as malformed) | same |
 

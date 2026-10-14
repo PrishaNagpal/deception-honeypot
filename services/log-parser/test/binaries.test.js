@@ -10,16 +10,21 @@ let dir;
 let stored;
 let scanner;
 
+function makeScanner(pathPrefix, upsertMalware) {
+  return new BinariesScanner({
+    dir,
+    pathPrefix,
+    upsertMalware: upsertMalware ?? (async (sample) => {
+      stored.push(sample);
+      return true;
+    }),
+  });
+}
+
 beforeEach(async () => {
   dir = await fs.mkdtemp(path.join(os.tmpdir(), 'binaries-test-'));
   stored = [];
-  scanner = new BinariesScanner({
-    dir,
-    upsertMalware: async (sample) => {
-      stored.push(sample);
-      return true;
-    },
-  });
+  scanner = makeScanner('dionaea/binaries');
 });
 afterEach(async () => {
   await fs.rm(dir, { recursive: true, force: true });
@@ -59,7 +64,7 @@ test('a file still growing is not hashed until it stops changing', async () => {
   expect(stored.map((s) => s.sha256)).toEqual([sha256('part 1 part 2')]);
 });
 
-test('hidden files and folders are ignored', async () => {
+test('hidden files and empty folders produce nothing', async () => {
   await fs.writeFile(path.join(dir, '.gitkeep'), '');
   await fs.mkdir(path.join(dir, 'subdir'));
   await scanner.scan();
@@ -68,26 +73,77 @@ test('hidden files and folders are ignored', async () => {
 });
 
 test('a missing folder is not an error', async () => {
-  const missing = new BinariesScanner({ dir: path.join(dir, 'nope'), upsertMalware: async () => true });
+  const missing = new BinariesScanner({
+    dir: path.join(dir, 'nope'), pathPrefix: 'x', upsertMalware: async () => true,
+  });
   await expect(missing.scan()).resolves.toBeUndefined();
 });
 
 test('if storing fails, the file is tried again on the next scan', async () => {
   let fail = true;
-  const flaky = new BinariesScanner({
-    dir,
-    upsertMalware: async (sample) => {
-      if (fail) {
-        fail = false;
-        throw new Error('database down');
-      }
-      stored.push(sample);
-      return true;
-    },
+  const flaky = makeScanner('dionaea/binaries', async (sample) => {
+    if (fail) {
+      fail = false;
+      throw new Error('database down');
+    }
+    stored.push(sample);
+    return true;
   });
   await fs.writeFile(path.join(dir, 'bin'), 'payload');
   await flaky.scan();
   await expect(flaky.scan()).rejects.toThrow('database down');
   await flaky.scan();
   expect(stored).toHaveLength(1);
+});
+
+describe('FTP upload folder (dionaea/ftp/root)', () => {
+  beforeEach(() => {
+    scanner = makeScanner('dionaea/ftp/root');
+  });
+
+  test('an upload is stored under the ftp/root prefix with the name the attacker chose', async () => {
+    await fs.writeFile(path.join(dir, 'notes_080750.txt'), 'harmless test upload\n');
+    await scanner.scan();
+    await scanner.scan();
+    expect(stored).toEqual([expect.objectContaining({
+      sha256: sha256('harmless test upload\n'),
+      service: 'dionaea',
+      file_path: 'dionaea/ftp/root/notes_080750.txt',
+      file_size: 21,
+    })]);
+  });
+
+  test('files inside folders the attacker created are found too', async () => {
+    await fs.mkdir(path.join(dir, 'tmp', 'x86'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'tmp', 'x86', 'bot'), 'nested payload');
+    await fs.writeFile(path.join(dir, 'top.sh'), 'top payload');
+    await scanner.scan();
+    await scanner.scan();
+    expect(stored.map((s) => s.file_path)).toEqual([
+      'dionaea/ftp/root/tmp/x86/bot',
+      'dionaea/ftp/root/top.sh',
+    ]);
+  });
+
+  test('an upload replaced with new content under the same name is hashed again', async () => {
+    const file = path.join(dir, 'same-name.bin');
+    await fs.writeFile(file, 'version 1');
+    await scanner.scan();
+    await scanner.scan();
+    await fs.writeFile(file, 'version 2, longer');
+    await scanner.scan();
+    await scanner.scan();
+    expect(stored.map((s) => s.sha256)).toEqual([sha256('version 1'), sha256('version 2, longer')]);
+  });
+
+  test('symbolic links are not followed', async () => {
+    const outside = await fs.mkdtemp(path.join(os.tmpdir(), 'outside-'));
+    await fs.writeFile(path.join(outside, 'secret'), 'not part of the honeypot');
+    await fs.symlink(outside, path.join(dir, 'link-to-dir'));
+    await fs.symlink(path.join(outside, 'secret'), path.join(dir, 'link-to-file'));
+    await scanner.scan();
+    await scanner.scan();
+    expect(stored).toEqual([]);
+    await fs.rm(outside, { recursive: true, force: true });
+  });
 });

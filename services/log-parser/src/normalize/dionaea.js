@@ -5,7 +5,8 @@
 //
 // One line becomes several rows, always in this order so that re-reading a
 // line gives the same source_seq values:
-//   seq 0       <proto>.connection   the connection itself
+//   seq 0       <proto>.connection   the connection itself (ftp.data for
+//                                    FTP's data channel)
 //   then        <proto>.login        one per entry in credentials[]
 //   then        <proto>.command      one per entry in ftp.commands[]
 
@@ -34,6 +35,18 @@ const PROTOCOL_NAMES = {
   pptpd: 'pptp',
   mqttd: 'mqtt',
   sipd: 'sip',
+};
+
+// Connections whose seq-0 event type is not "<proto>.connection". Dionaea
+// logs FTP's data channel (the second connection a client opens to send or
+// receive a file) as its own connection: ftpdatalisten when the client
+// connects in (passive mode, seen in our logs). ftpdatacon, where Dionaea
+// connects out to the client (active mode), has not been seen yet but is the
+// same channel. normalizeDionaea skips listen records first, so only real
+// client traffic gets here.
+const CONNECTION_EVENT_TYPES = {
+  ftpdatalisten: 'ftp.data',
+  ftpdatacon: 'ftp.data',
 };
 
 function normalizeDionaea(line) {
@@ -73,7 +86,7 @@ function normalizeDionaea(line) {
     }, fields));
   }
 
-  addRow(`${protocol}.connection`);
+  addRow(CONNECTION_EVENT_TYPES[connection.protocol] ?? `${protocol}.connection`);
 
   for (const credential of listOf(record.credentials)) {
     if (credential === null || typeof credential !== 'object') {

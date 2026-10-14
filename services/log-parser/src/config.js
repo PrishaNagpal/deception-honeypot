@@ -44,7 +44,9 @@ function loadConfig() {
       cowrie: env('COWRIE_LOG', path.join(REPO_ROOT, 'data/cowrie/log/cowrie.json')),
       dionaea: env('DIONAEA_LOG', path.join(REPO_ROOT, 'data/dionaea/log/dionaea.json')),
     },
+    // Folders whose files are hashed into malware_samples. Empty string = off.
     binariesDir: env('DIONAEA_BINARIES_DIR', path.join(REPO_ROOT, 'data/dionaea/lib/dionaea/binaries')),
+    uploadsDir: env('DIONAEA_UPLOADS_DIR', path.join(REPO_ROOT, 'data/dionaea/lib/dionaea/ftp/root')),
     pollIntervalMs: intEnv('POLL_INTERVAL_MS', 1000),
     binariesIntervalMs: intEnv('BINARIES_INTERVAL_MS', 10_000),
     summaryIntervalMs: intEnv('SUMMARY_INTERVAL_MS', 60_000),

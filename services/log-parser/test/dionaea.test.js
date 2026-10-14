@@ -132,6 +132,40 @@ test('IPv4-mapped IPv6 src_ip is stored as plain IPv4 on every row', () => {
   expect(result.rows[0].raw.src_ip).toBe('::ffff:203.0.113.50');
 });
 
+describe("FTP's data channel is stored as ftp.data", () => {
+  // Copied from the live hp-dionaea log on 2026-10-14: the data connection a
+  // client opened to upload a file.
+  const REAL_DATA_CHANNEL_LINE =
+    '{"connection": {"protocol": "ftpdatalisten", "transport": "tcp", "type": "accept"}, "dst_ip": "172.28.0.12", "dst_port": 46795, "src_hostname": "", "src_ip": "172.28.0.2", "src_port": 46838, "timestamp": "2026-10-14T08:08:04.151281"}';
+
+  test('a real passive-mode data connection becomes one ftp.data row', () => {
+    const result = normalizeDionaea(REAL_DATA_CHANNEL_LINE);
+    expect(result.status).toBe('rows');
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]).toMatchObject({
+      event_type: 'ftp.data',
+      source_seq: 0,
+      src_ip: '172.28.0.2',
+      src_port: 46838,
+      event_time: '2026-10-14T08:08:04.151281Z',
+    });
+    expect(result.rows[0].raw.connection.protocol).toBe('ftpdatalisten');
+  });
+
+  test('an active-mode data connection (ftpdatacon) gets the same name', () => {
+    const result = normalizeDionaea(line({ connection: { protocol: 'ftpdatacon', transport: 'tcp', type: 'connect' } }));
+    expect(result.rows[0].event_type).toBe('ftp.data');
+  });
+
+  test('a data-channel listen record is still skipped', () => {
+    expect(normalizeDionaea(REAL_LISTEN_LINE)).toEqual({ status: 'skipped', reason: 'listen' });
+  });
+
+  test('the control connection keeps its ftp.connection name', () => {
+    expect(normalizeDionaea(line({})).rows[0].event_type).toBe('ftp.connection');
+  });
+});
+
 test('SMB uses the same pattern under its own name', () => {
   const result = normalizeDionaea(line({
     connection: { protocol: 'smbd', transport: 'tcp', type: 'accept' },

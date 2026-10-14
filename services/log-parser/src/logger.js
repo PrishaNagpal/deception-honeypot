@@ -43,7 +43,8 @@ function defaultWrite(level, line) {
 //                   Dionaea listen records, blank lines)
 //   malformed       lines that could not be used, by reason
 //   invalid_src_ip  Flask lines stored with src_ip 0.0.0.0
-// Plus malware rows: new sha256 values, and Dionaea binaries hashed.
+// Plus malware rows: new sha256 values, and files hashed from Dionaea's
+// binaries and FTP upload folders.
 function createStats(now = () => Date.now()) {
   const startedAt = now();
   const services = {};
@@ -57,7 +58,7 @@ function createStats(now = () => Date.now()) {
       invalid_src_ip: 0,
     };
   }
-  const malware = { new_samples: 0, binaries_hashed: 0 };
+  const malware = { new_samples: 0, files_hashed: 0 };
 
   function summaryLine() {
     const uptime = Math.round((now() - startedAt) / 1000);
@@ -71,7 +72,7 @@ function createStats(now = () => Date.now()) {
           (service === 'flask-http' ? ` invalid_src_ip=${s.invalid_src_ip}` : ''),
       );
     }
-    parts.push(`| malware new_samples=${malware.new_samples} binaries_hashed=${malware.binaries_hashed}`);
+    parts.push(`| malware new_samples=${malware.new_samples} files_hashed=${malware.files_hashed}`);
     return parts.join(' ');
   }
 

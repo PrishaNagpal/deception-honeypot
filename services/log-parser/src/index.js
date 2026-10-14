@@ -2,10 +2,11 @@
 
 // Entry point: node src/index.js
 //
-// Starts one polling loop per honeypot log, one for Dionaea binaries, and a
-// summary line every 60 seconds. Stops cleanly on Ctrl+C or `docker stop`
-// (SIGINT / SIGTERM): the line being stored is finished, nothing is half
-// written, and the next start resumes from the database.
+// Starts one polling loop per honeypot log, one per Dionaea file folder
+// (downloaded binaries and FTP uploads), and a summary line every 60 seconds.
+// Stops cleanly on Ctrl+C or `docker stop` (SIGINT / SIGTERM): the line being
+// stored is finished, nothing is half written, and the next start resumes
+// from the database.
 
 const { loadConfig, describeConfig } = require('./config');
 const { createLogger, createStats } = require('./logger');
@@ -129,7 +130,7 @@ async function main() {
   const log = createLogger();
   const config = loadConfig();
   const safe = describeConfig(config);
-  log.info('starting', { node: process.version, db: safe.db, logs: safe.logs, binaries: safe.binariesDir });
+  log.info('starting', { node: process.version, db: safe.db, logs: safe.logs, binaries: safe.binariesDir, uploads: safe.uploadsDir });
 
   if (!config.db.user || !config.db.password) {
     log.error('database user or password not set (PGUSER/PGPASSWORD or POSTGRES_USER/POSTGRES_PASSWORD)');
@@ -175,17 +176,23 @@ async function main() {
       loops.push(runLoop(`${service} log`, config.pollIntervalMs, () => source.poll(), { log, signal }));
     }
 
-    if (config.binariesDir) {
+    const fileFolders = [
+      { name: 'dionaea binaries', dir: config.binariesDir, pathPrefix: 'dionaea/binaries' },
+      { name: 'dionaea ftp uploads', dir: config.uploadsDir, pathPrefix: 'dionaea/ftp/root' },
+    ];
+    for (const { name, dir, pathPrefix } of fileFolders) {
+      if (!dir) continue;
       const scanner = new BinariesScanner({
-        dir: config.binariesDir,
+        dir,
+        pathPrefix,
         log,
         upsertMalware: (sample) => db.upsertMalware(sample),
         onHashed: ({ isNew }) => {
-          stats.malware.binaries_hashed += 1;
+          stats.malware.files_hashed += 1;
           if (isNew) stats.malware.new_samples += 1;
         },
       });
-      loops.push(runLoop('dionaea binaries', config.binariesIntervalMs, () => scanner.scan(), { log, signal }));
+      loops.push(runLoop(name, config.binariesIntervalMs, () => scanner.scan(), { log, signal }));
     }
   }
 

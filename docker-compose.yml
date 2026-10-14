@@ -95,6 +95,7 @@ services:
       COWRIE_LOG: /logs/cowrie/cowrie.json
       DIONAEA_LOG: /logs/dionaea/dionaea.json
       DIONAEA_BINARIES_DIR: /logs/dionaea-lib/dionaea/binaries
+      DIONAEA_UPLOADS_DIR: /logs/dionaea-lib/dionaea/ftp/root
     # No ports. Every log is mounted read-only: the parser can read the
     # honeypots' files but never change them.
     volumes:
