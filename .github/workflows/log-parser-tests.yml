@@ -1,0 +1,78 @@
+name: Log parser tests
+
+on:
+  push:
+    paths:
+      - 'services/log-parser/**'
+      - 'db/init.sql'
+      - '.github/workflows/log-parser-tests.yml'
+  pull_request:
+    paths:
+      - 'services/log-parser/**'
+      - 'db/init.sql'
+      - '.github/workflows/log-parser-tests.yml'
+
+# Read the code, nothing else. The tests need no write access to the repo.
+permissions:
+  contents: read
+
+# A new push to the same branch (or PR) cancels the run still in progress.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # A fresh PostgreSQL 16 for this run only, deleted when the job ends.
+    # The job does not start its steps until the health check passes.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          # Throwaway credentials for this CI database only. They are not
+          # real secrets and are not used anywhere else.
+          POSTGRES_USER: ci_test
+          POSTGRES_PASSWORD: ci_test_password
+          POSTGRES_DB: honeypot_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci_test -d honeypot_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    defaults:
+      run:
+        working-directory: services/log-parser
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js (version from .nvmrc) with npm cache
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: services/log-parser/.nvmrc
+          cache: npm
+          cache-dependency-path: services/log-parser/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run all tests, including the database tests
+        # npm run test:db reads ../../.env, which CI does not have, so the
+        # database settings are given directly. Same throwaway credentials as
+        # the postgres service above.
+        env:
+          PGHOST: localhost
+          PGPORT: '5432'
+          PGUSER: ci_test
+          PGPASSWORD: ci_test_password
+          PGDATABASE: honeypot_test
+          # Fail instead of skipping if the settings above ever go missing.
+          REQUIRE_DB_TESTS: '1'
+        run: npm test
