@@ -99,3 +99,65 @@ Add teammates: repo **Settings → Collaborators**.
 ## For Track B
 
 See `docs/LOG_CONTRACT.md`. Flask logs appear immediately under `data/flask/`. After SSH or FTP tests, run `scripts/export-logs.sh` so Cowrie and Dionaea files land under `data/`.
+
+## Log parser
+
+`services/log-parser` (container `hp-parser`) reads the three honeypot logs as they grow and writes one normalized row per attacker action into the `events` table in PostgreSQL (`hp-db`), as described in `db/init.sql`. Files Dionaea captures in its `binaries` folder are hashed into `malware_samples`, and Cowrie download/upload events add their SHA-256 there too.
+
+- It reads the live logs directly: the Cowrie and Dionaea volumes and `./data/flask`, all mounted read-only. No export script is needed.
+- It checks the logs once a second, so new events reach the database within about a second.
+- After a restart it continues where it stopped; nothing is stored twice.
+- Every 60 seconds `docker logs hp-parser` shows a summary: lines read, rows inserted, lines already stored, skipped and malformed lines per honeypot.
+
+### Run it
+
+With the rest of the lab (needs `POSTGRES_USER` and `POSTGRES_PASSWORD` in `.env`):
+
+```bash
+docker compose up -d --build
+docker logs -f hp-parser
+```
+
+Locally, without Docker (Node 22 via nvm; reads the copies under `data/`, connects to `127.0.0.1:5433`):
+
+```bash
+cd services/log-parser
+nvm use
+npm ci
+npm run start:local
+```
+
+### Tests
+
+```bash
+cd services/log-parser
+npm test            # all tests except the database ones
+npm run test:db     # everything, against hp-db (reads the repo's .env)
+```
+
+The database tests build the tables from `db/init.sql` in a temporary schema and drop it afterwards, so the real tables are not touched.
+
+### Environment variables
+
+| Variable | In Docker | Local default |
+|---|---|---|
+| `PGHOST`, `PGPORT` | `hp-db`, `5432` | `127.0.0.1`, `5433` |
+| `PGUSER`, `PGPASSWORD`, `PGDATABASE` | from `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` in `.env` | the same `POSTGRES_*` values |
+| `FLASK_LOG` | `/logs/flask/http.json` | `data/flask/http.json` |
+| `COWRIE_LOG` | `/logs/cowrie/cowrie.json` | `data/cowrie/log/cowrie.json` |
+| `DIONAEA_LOG` | `/logs/dionaea/dionaea.json` | `data/dionaea/log/dionaea.json` |
+| `DIONAEA_BINARIES_DIR` | `/logs/dionaea-lib/dionaea/binaries` | `data/dionaea/lib/dionaea/binaries` |
+| `POLL_INTERVAL_MS`, `BINARIES_INTERVAL_MS`, `SUMMARY_INTERVAL_MS` | `1000`, `10000`, `60000` | same |
+| `MAX_LINE_BYTES` | `1048576` (longer lines are skipped as malformed) | same |
+
+Rotated Cowrie logs next to the live file (`cowrie.json.2026-10-13`) are read too. The password is never printed.
+
+### After a reboot
+
+Docker Desktop can start the containers before the WSL files are ready. `hp-flask` and `hp-parser` then see an empty `./data/flask` folder instead of the real one: Flask logins fail with HTTP 500, and the parser logs `waiting for file` for `/logs/flask/http.json`. Restart both once WSL is up:
+
+```bash
+docker restart hp-flask hp-parser
+```
+
+Check with a fake login on http://127.0.0.1:8080: a new line should appear in `data/flask/http.json`, and a new `http_login` row in `events` within a few seconds.

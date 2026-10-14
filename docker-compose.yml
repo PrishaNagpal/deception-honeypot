@@ -78,6 +78,34 @@ services:
       timeout: 5s
       retries: 5
 
+  log-parser:
+    build: ./services/log-parser
+    container_name: hp-parser
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: hp-db
+      PGPORT: "5432"
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB:-honeypot}
+      FLASK_LOG: /logs/flask/http.json
+      COWRIE_LOG: /logs/cowrie/cowrie.json
+      DIONAEA_LOG: /logs/dionaea/dionaea.json
+      DIONAEA_BINARIES_DIR: /logs/dionaea-lib/dionaea/binaries
+    # No ports. Every log is mounted read-only: the parser can read the
+    # honeypots' files but never change them.
+    volumes:
+      - ./data/flask:/logs/flask:ro
+      - cowrie_logs:/logs/cowrie:ro
+      - dionaea_logs:/logs/dionaea:ro
+      - dionaea_lib:/logs/dionaea-lib:ro
+    networks:
+      honeypot_net:
+        ipv4_address: 172.28.0.14
+
 volumes:
   cowrie_logs:
   dionaea_lib:
