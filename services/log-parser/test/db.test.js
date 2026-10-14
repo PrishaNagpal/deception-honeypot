@@ -4,8 +4,11 @@
 // db/init.sql, so the real events table is never touched.
 //
 //   npm run test:db      (loads the repo's .env)
+//   PGHOST=... PGUSER=... PGPASSWORD=... npm test    (how CI runs it)
 //
-// Skipped when no database password is configured, e.g. plain `npm test`.
+// Skipped when no database user and password are configured, e.g. plain
+// `npm test`. With REQUIRE_DB_TESTS=1 (set in CI) a missing configuration is
+// a failure instead, so a typo in CI cannot turn these tests into silent skips.
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -15,6 +18,12 @@ const { createPool, createDb, LineRejectedError } = require('../src/db');
 const config = loadConfig();
 const configured = Boolean(config.db.user && config.db.password);
 const describeDb = configured ? describe : describe.skip;
+
+if (!configured && process.env.REQUIRE_DB_TESTS === '1') {
+  test('database is configured (REQUIRE_DB_TESTS=1)', () => {
+    throw new Error('REQUIRE_DB_TESTS=1 but PGUSER/PGPASSWORD (or POSTGRES_USER/POSTGRES_PASSWORD) are not set');
+  });
+}
 
 const INIT_SQL = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'db', 'init.sql'), 'utf8');
 const SCHEMA = `jest_${process.pid}_${Date.now()}`;

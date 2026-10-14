@@ -102,6 +102,10 @@ See `docs/LOG_CONTRACT.md`. Flask logs appear immediately under `data/flask/`. A
 
 ## Log parser
 
+[![Log parser tests](https://github.com/PrishaNagpal/deception-honeypot/actions/workflows/log-parser-tests.yml/badge.svg)](https://github.com/PrishaNagpal/deception-honeypot/actions/workflows/log-parser-tests.yml)
+
+On every push and pull request that touches `services/log-parser/`, `db/init.sql` or the workflow, GitHub Actions runs all parser tests, including the database tests against a temporary PostgreSQL 16 (`.github/workflows/log-parser-tests.yml`).
+
 `services/log-parser` (container `hp-parser`) reads the three honeypot logs as they grow and writes one normalized row per attacker action into the `events` table in PostgreSQL (`hp-db`), as described in `db/init.sql`. Files Dionaea stores (downloads in `binaries/`, FTP uploads in `ftp/root/`, subfolders included) are hashed into `malware_samples`, and Cowrie download/upload events add their SHA-256 there too.
 
 - It reads the live logs directly: the Cowrie and Dionaea volumes and `./data/flask`, all mounted read-only. No export script is needed.
