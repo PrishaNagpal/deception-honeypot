@@ -63,12 +63,16 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-honeypot}
+      # Used by db/zz-grafana-user.sh to create the read-only grafana_ro user.
+      GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:?set GRAFANA_DB_PASSWORD in .env}
     ports:
       - "127.0.0.1:5433:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
       # Runs once, only when pg_data is empty (first start).
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      # "zz-" so it runs after init.sql (tables must exist first).
+      - ./db/zz-grafana-user.sh:/docker-entrypoint-initdb.d/zz-grafana-user.sh:ro
     networks:
       honeypot_net:
         ipv4_address: 172.28.0.13
@@ -107,11 +111,59 @@ services:
       honeypot_net:
         ipv4_address: 172.28.0.14
 
+  grafana:
+    image: grafana/grafana-oss:11.2.0
+    container_name: hp-grafana
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      # Read by grafana/provisioning/datasources/postgres.yml
+      POSTGRES_DB: ${POSTGRES_DB:-honeypot}
+      GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:?set GRAFANA_DB_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      # Own volume: dashboards/settings survive restarts and reset-demo.sh.
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
+    networks:
+      honeypot_net:
+        ipv4_address: 172.28.0.15
+
+  enrichment:
+    build: ./services/enrichment
+    container_name: hp-enrich
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: hp-db
+      PGPORT: "5432"
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB:-honeypot}
+      VIRUSTOTAL_API_KEY: ${VIRUSTOTAL_API_KEY:-}
+      ABUSEIPDB_API_KEY: ${ABUSEIPDB_API_KEY:-}
+    # No ports. Only talks to hp-db and the two enrichment APIs.
+    networks:
+      honeypot_net:
+        ipv4_address: 172.28.0.16
+
 volumes:
   cowrie_logs:
   dionaea_lib:
   dionaea_logs:
   pg_data:
+  grafana_data:
 
 networks:
   honeypot_net:

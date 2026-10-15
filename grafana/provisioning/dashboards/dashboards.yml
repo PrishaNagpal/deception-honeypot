@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: honeypot
+    orgId: 1
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    updateIntervalSeconds: 10
+    options:
+      path: /etc/grafana/dashboards
