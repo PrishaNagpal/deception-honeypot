@@ -1,0 +1,4 @@
+﻿ioc_type,value,first_seen,last_seen,event_count,services,abuse_score,country,vt_malicious,vt_label,note
+ip,172.28.0.2,2026-10-22 19:40:54.209564+00,2026-10-22 19:46:40.349782+00,494,cowrie dionaea flask-http,,,,,private lab address: no reputation data
+ip,172.28.0.1,2026-10-16 03:13:12.909392+00,2026-10-22 18:27:50.130746+00,20,cowrie flask-http,,,,,private lab address: no reputation data
+sha256,275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f,2026-10-16 03:18:30.078151+00,2026-10-16 03:18:30.078151+00,1,dionaea,,,66,virus.eicar/test,https://www.virustotal.com/gui/file/275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f

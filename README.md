@@ -3,9 +3,9 @@
 Multi-service lab for the Computer Networks project: fake SSH (Cowrie), fake HTTP login/signup (Flask), fake FTP/SMB (Dionaea), on an isolated Docker bridge.
 
 **Track A :** Weeks 1–2 are done.  
-**Track B:** `log_parser.py` — not started.  
-**Track C:** AbuseIPDB / VirusTotal + Grafana — not started.  
-**Week 5:** joint tests, `IOC_export.csv`, final report — not started.
+**Track B:** log parser (`services/log-parser`) — done, see [Log parser](#log-parser).  
+**Track C:** AbuseIPDB / VirusTotal enrichment, Grafana dashboard, world map and phone alerts — built, see [Grafana dashboard and enrichment (Track C)](#grafana-dashboard-and-enrichment-track-c).  
+**Week 5:** attack simulation (`scripts/simulate-attack.sh`) and `IOC_export.csv` (`scripts/export-ioc.sh`) — scripts ready, joint run and final report still to do.
 
 Repo: https://github.com/User_name/deception-honeypot
 
@@ -166,6 +166,96 @@ docker restart hp-flask hp-parser
 ```
 
 Check with a fake login on http://127.0.0.1:8080: a new line should appear in `data/flask/http.json`, and a new `http_login` row in `events` within a few seconds.
+
+## Grafana dashboard and enrichment (Track C)
+
+Open http://127.0.0.1:3000 and sign in as `admin` with `GRAFANA_ADMIN_PASSWORD` from `.env`. The dashboard **Honeypot - Live Attacks** refreshes every 5 seconds. Grafana reads the database as `grafana_ro`, a user that can only `SELECT` (`db/zz-grafana-user.sh`).
+
+| Panel | Shows |
+|---|---|
+| Attacks over time | events per minute, one line per honeypot |
+| Top passwords tried | the 10 most guessed passwords, all honeypots |
+| Top commands | Cowrie shell and FTP commands |
+| Live attack feed | latest 20 events, including Flask `tags` (`sqli_like`, `oversized_payload`) |
+| Captured files (VirusTotal) | files the honeypots caught and how many antivirus engines flag them |
+| Attacker origins (world map) | country of every public attacker IP, bigger circle = more attacks |
+| Attacks by country | the same data as a table, with the worst AbuseIPDB score per country |
+
+### `.env` values
+
+Copy `.env.example` to `.env` and fill it in: `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` (`honeypot`), `GRAFANA_ADMIN_PASSWORD`, `GRAFANA_DB_PASSWORD`. Optional, for enrichment: `VIRUSTOTAL_API_KEY`, `ABUSEIPDB_API_KEY` (free keys work). Optional, for phone alerts: Discord or Telegram values (below). Never commit `.env`.
+
+### Enrichment (`services/enrichment`, container `hp-enrich`)
+
+`enrich.py` runs a round every 30 seconds:
+
+- **VirusTotal**: every file in `malware_samples` that has not been checked yet. A file VirusTotal has never seen is stored as `not found on VirusTotal` and not asked again. Free keys allow 4 requests a minute, so there is a 16 second pause between lookups.
+- **AbuseIPDB**: every new IP in `events`, and any IP not checked for 7 days, into `ip_reputation`. **Private addresses (172.28.x.x, 10.x, 192.168.x, 127.x) are never sent to the API**; they are stored with `is_public = false`.
+- If either API says "too many requests" (HTTP 429), the round stops and the remaining items are tried next round. Nothing crashes and nothing is lost.
+- If `hp-db` restarts, the script drops the dead connection and reconnects (waiting 1, 2, 4 ... 30 seconds) instead of crashing.
+- With an empty API key that service is skipped (a line in `docker logs hp-enrich` says so).
+
+Look up one IP by hand:
+
+```bash
+docker compose exec enrichment python enrich.py abuse-ip 8.8.8.8
+```
+
+Tests (unit tests need nothing; the database tests build a temporary schema from `db/init.sql`, like the parser's):
+
+```bash
+cd services/enrichment
+pip install -r requirements-dev.txt
+python -m pytest                       # unit tests, database tests are skipped
+PGHOST=127.0.0.1 PGPORT=5433 PGUSER=... PGPASSWORD=... PGDATABASE=honeypot python -m pytest   # everything
+```
+
+GitHub Actions runs both on every change to `services/enrichment/` (`.github/workflows/enrichment-tests.yml`).
+
+### World map
+
+The map uses the country that AbuseIPDB returns and Grafana's built-in country coordinates, so it needs **public** attacker IPs and an AbuseIPDB key. Attacks from this lab machine come from the Docker gateway (`172.28.0.1`), which has no location, so on a pure lab run the map is empty and says why.
+
+To show the map in the demo, add clearly fake attackers (documentation IP ranges, made-up countries):
+
+```bash
+bash scripts/seed-demo-geo.sh            # add 12 demo attackers
+bash scripts/seed-demo-geo.sh --remove   # delete them again
+```
+
+Remove them before taking final numbers. `IOC_export.csv` ignores them. Their events are marked `source_file = 'demo-seed'`.
+
+### Phone alerts (Discord or Telegram)
+
+Grafana sends a message when an attack starts and another when it is over, per honeypot (SSH, web portal, FTP/SMB): every 30 seconds each rule asks "did this honeypot log anything in the last minute?". One alert per honeypot per attack, repeated at most every 4 hours. Files: `grafana/provisioning/alerting/` (`contact-points.yml`, `rules.yml`, `policies.yml`).
+
+Set up one of the two in `.env`:
+
+- **Discord**: in a channel, Edit Channel, Integrations, Webhooks, New Webhook, copy the URL into `DISCORD_WEBHOOK_URL`.
+- **Telegram**: message `@BotFather`, `/newbot`, put the token in `TELEGRAM_BOT_TOKEN`. Send your new bot any message, open `https://api.telegram.org/bot<TOKEN>/getUpdates` and put the `chat` `id` into `TELEGRAM_CHAT_ID`.
+
+Then recreate Grafana so it reads the new values, and test:
+
+```bash
+docker compose up -d grafana
+bash scripts/test-phone-alert.sh        # sends a test message straight to the phone
+```
+
+In Grafana, Alerting, Contact points, `phone-alerts`, Test, sends one through Grafana itself. The integration you leave empty logs a harmless "failed to send" line in `docker logs hp-grafana` when an alert fires; the other still delivers. Alert rules appear under Alerting, Alert rules, folder **Honeypot**.
+
+Grafana's outbound access: the `grafana` container can reach Discord and Telegram through the normal Docker NAT. The honeypot containers still publish nothing beyond `127.0.0.1`.
+
+## Week 5: attack simulation and IOC export
+
+```bash
+sudo apt install nmap hydra curl         # once
+bash scripts/simulate-attack.sh          # Nmap scan, Hydra on SSH / FTP / web, SQLi + oversized + signup requests
+bash scripts/export-ioc.sh               # writes IOC_export.csv
+```
+
+`simulate-attack.sh` can only aim at `127.0.0.1` (the lab's own ports); there is no option to change the target. It also accepts `scan`, `ssh`, `ftp` or `web` to run one part. Afterwards it prints how many events each honeypot recorded. Check the dashboard and the phone alert while it runs.
+
+`IOC_export.csv` lists every attacker IP (with AbuseIPDB score and country), every captured file hash (with its VirusTotal verdict) and every URL an attacker made Cowrie download from. Columns: `ioc_type, value, first_seen, last_seen, event_count, services, abuse_score, country, vt_malicious, vt_label, note`. Run it after enrichment has had time to look everything up.
 
 ## Reset before a demo
 

@@ -4,7 +4,8 @@ Usage (inside the container, or locally with the PG* / API key env vars set):
   python enrich.py vt                 look up every unchecked file in malware_samples
   python enrich.py abuse              look up every new / stale IP from events
   python enrich.py abuse-ip 8.8.8.8   look up ONE IP and print the result (also stored)
-  python enrich.py loop               run vt + abuse forever (what docker compose does)
+  python enrich.py loop               run vt + abuse forever (what docker compose does);
+                                      survives hp-db restarts and API rate limits
 """
 import ipaddress
 import json
@@ -21,6 +22,7 @@ ABUSE_KEY = os.environ.get("ABUSEIPDB_API_KEY", "")
 VT_DELAY_S = 16          # free VirusTotal key: 4 requests/minute
 LOOP_EVERY_S = 30
 ABUSE_REFRESH_DAYS = 7   # re-check an IP after this long
+RECONNECT_MAX_WAIT_S = 30  # longest pause between tries to reach the database
 
 
 def connect():
@@ -35,6 +37,31 @@ def connect():
 
 def log(msg):
     print(time.strftime("%H:%M:%S"), msg, flush=True)
+
+
+def connect_with_retry(connect_fn=None, sleep=time.sleep):
+    """Keep trying until the database answers. Waits 1, 2, 4 ... 30 seconds.
+
+    Used at start-up and after hp-db restarts: Docker brings the database back
+    by itself, so the right move is to wait for it, not to crash.
+    """
+    connect_fn = connect_fn or connect
+    wait = 1
+    while True:
+        try:
+            return connect_fn()
+        except psycopg2.OperationalError as e:
+            log(f"database not reachable ({str(e).strip().splitlines()[0]}), retrying in {wait}s")
+            sleep(wait)
+            wait = min(wait * 2, RECONNECT_MAX_WAIT_S)
+
+
+def drop_connection(conn):
+    """Close a connection that may already be dead. Never raises."""
+    try:
+        conn.close()
+    except psycopg2.Error:
+        pass
 
 
 # --------------------------------------------------------------------------
@@ -76,6 +103,7 @@ def run_vt(conn):
     with conn.cursor() as cur:
         cur.execute("SELECT sha256 FROM malware_samples WHERE vt_checked_at IS NULL ORDER BY first_seen")
         todo = [row[0] for row in cur.fetchall()]
+    conn.commit()  # don't sit "idle in transaction" through the 16 s sleeps below
     for sha in todo:
         try:
             result = vt_lookup(sha)
@@ -109,7 +137,9 @@ def is_public(ip):
 
 
 def abuse_lookup(ip):
-    """Returns the ip_reputation columns for one IP. Private IPs never hit the API."""
+    """Returns the ip_reputation columns for one IP, or None if AbuseIPDB says
+    "too many requests" (free keys: 1000 checks a day). Private IPs never hit
+    the API."""
     if not is_public(ip):
         return {"ip": ip, "abuse_confidence_score": None, "total_reports": None,
                 "last_reported_at": None, "country_code": None, "country_name": None,
@@ -121,6 +151,8 @@ def abuse_lookup(ip):
         params={"ipAddress": ip, "maxAgeInDays": 90},
         timeout=20,
     )
+    if r.status_code == 429:
+        return None
     r.raise_for_status()
     d = r.json()["data"]
     return {"ip": ip, "abuse_confidence_score": d.get("abuseConfidenceScore"),
@@ -159,6 +191,7 @@ def run_abuse(conn):
             (ABUSE_REFRESH_DAYS,),
         )
         todo = [row[0] for row in cur.fetchall()]
+    conn.commit()
     for ip in todo:
         if is_public(ip) and not ABUSE_KEY:
             log("ABUSEIPDB_API_KEY is empty, skipping public IP " + ip)
@@ -168,33 +201,59 @@ def run_abuse(conn):
         except requests.RequestException as e:
             log(f"AbuseIPDB error for {ip}: {e}")
             continue
+        if row is None:
+            # Same rule as VirusTotal: stop the round. Every remaining IP would
+            # get the same answer, and they stay unchecked so the next round
+            # picks them up.
+            log("AbuseIPDB rate limit hit, will retry next round")
+            return
         store_ip(conn, row)
         log(f"AbuseIPDB {ip}: public={row['is_public']} score={row['abuse_confidence_score']}")
 
 
 # --------------------------------------------------------------------------
+def run_round(conn):
+    """One pass of vt + abuse. Returns the connection to use next: the same one,
+    or a new one if the database went away during the round."""
+    for step in (run_vt, run_abuse):
+        try:
+            step(conn)
+        except psycopg2.Error as e:
+            # hp-db restarted, or a query failed. A dead connection cannot be
+            # rolled back, so throw it away and reconnect instead of crashing.
+            log(f"database error: {str(e).strip().splitlines()[0]}")
+            drop_connection(conn)
+            return connect_with_retry()
+    return conn
+
+
+def run_loop(conn, sleep=time.sleep, rounds=None):
+    n = 0
+    while rounds is None or n < rounds:
+        conn = run_round(conn)
+        n += 1
+        sleep(LOOP_EVERY_S)
+
+
 def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else "loop"
-    conn = connect()
+    if cmd not in ("vt", "abuse", "abuse-ip", "loop"):
+        sys.exit(__doc__)
+    if cmd == "abuse-ip" and len(sys.argv) < 3:
+        sys.exit(__doc__)
+    conn = connect_with_retry()
     if cmd == "vt":
         run_vt(conn)
     elif cmd == "abuse":
         run_abuse(conn)
     elif cmd == "abuse-ip":
         row = abuse_lookup(sys.argv[2])
+        if row is None:
+            sys.exit("AbuseIPDB says too many requests. Try again later.")
         store_ip(conn, row)
         print(json.dumps({k: v for k, v in row.items() if k != "raw"}, indent=2, default=str))
     elif cmd == "loop":
-        while True:
-            for step in (run_vt, run_abuse):
-                try:
-                    step(conn)
-                except psycopg2.Error as e:
-                    log(f"database error: {e}")
-                    conn.rollback()
-            time.sleep(LOOP_EVERY_S)
-    else:
-        sys.exit(__doc__)
+        run_loop(conn)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,14 @@
+# Notification policy: how alerts are grouped before they reach the phone.
+# (Grafana keeps ONE policy tree; this file replaces the default one.)
+#
+# One message per honeypot when an attack starts, one when it ends. A long attack
+# is repeated at most every 4 hours so the phone does not buzz all night.
+apiVersion: 1
+
+policies:
+  - orgId: 1
+    receiver: phone-alerts
+    group_by: ['alertname']
+    group_wait: 5s        # send almost at once: the point is to know when it starts
+    group_interval: 1m
+    repeat_interval: 4h

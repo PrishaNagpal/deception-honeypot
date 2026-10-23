@@ -127,6 +127,12 @@ services:
       # Read by grafana/provisioning/datasources/postgres.yml
       POSTGRES_DB: ${POSTGRES_DB:-honeypot}
       GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:?set GRAFANA_DB_PASSWORD in .env}
+      # Phone alerts, read by grafana/provisioning/alerting/contact-points.yml.
+      # Leave the ones you don't use empty: Grafana refuses empty values, so
+      # a harmless placeholder (never reachable) is used instead.
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-https://discord.invalid/api/webhooks/not-configured}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-not-configured}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-0}
     ports:
       - "127.0.0.1:3000:3000"
     volumes:

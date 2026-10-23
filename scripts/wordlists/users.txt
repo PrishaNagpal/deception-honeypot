@@ -1,0 +1,8 @@
+root
+admin
+user
+test
+oracle
+ubuntu
+ftp
+postgres

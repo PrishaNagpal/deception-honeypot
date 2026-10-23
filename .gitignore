@@ -13,3 +13,5 @@ data/cowrie/log/*
 data/dionaea/log/*
 data/dionaea/lib/*
 !data/**/.gitkeep
+
+.pytest_cache/

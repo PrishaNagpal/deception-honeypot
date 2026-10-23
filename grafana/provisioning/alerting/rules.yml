@@ -1,0 +1,180 @@
+# Phone alerts: when to send.
+#
+# One rule per honeypot, so the message says WHICH service is under attack.
+# Each rule asks the database every 30 seconds: "did this honeypot log anything
+# in the last minute?" If yes, the alert fires (attack started) and your phone
+# gets a message. When it has been quiet for a minute it resolves (attack over)
+# and you get a second message. See policies.yml for how often it can repeat.
+#
+# Demo data from scripts/seed-demo-geo.sh is never placed in the last 2 minutes,
+# so it does not trigger these.
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: attack-started
+    folder: Honeypot
+    interval: 30s
+    rules:
+      - uid: attack-ssh
+        title: "Attack started: SSH honeypot (Cowrie)"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: honeypot-pg
+            model:
+              refId: A
+              editorMode: code
+              format: time_series
+              rawQuery: true
+              rawSql: "SELECT now() AS time, count(*)::float AS attacks FROM events WHERE service = 'cowrie' AND event_time > now() - interval '1 minute'"
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              datasource:
+                type: __expr__
+                uid: __expr__
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 0
+              datasource:
+                type: __expr__
+                uid: __expr__
+              intervalMs: 1000
+              maxDataPoints: 43200
+        noDataState: OK
+        execErrState: OK
+        for: 0s
+        isPaused: false
+        labels:
+          service: cowrie
+        annotations:
+          summary: "Attack started: SSH honeypot (Cowrie)"
+          description: "Someone is attacking the fake SSH jump box (Cowrie, port 2222). Open the Honeypot - Live Attacks dashboard for details."
+      - uid: attack-web
+        title: "Attack started: web portal honeypot (Flask)"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: honeypot-pg
+            model:
+              refId: A
+              editorMode: code
+              format: time_series
+              rawQuery: true
+              rawSql: "SELECT now() AS time, count(*)::float AS attacks FROM events WHERE service = 'flask-http' AND event_time > now() - interval '1 minute'"
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              datasource:
+                type: __expr__
+                uid: __expr__
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 0
+              datasource:
+                type: __expr__
+                uid: __expr__
+              intervalMs: 1000
+              maxDataPoints: 43200
+        noDataState: OK
+        execErrState: OK
+        for: 0s
+        isPaused: false
+        labels:
+          service: flask-http
+        annotations:
+          summary: "Attack started: web portal honeypot (Flask)"
+          description: "Someone is attacking the fake employee portal (Flask, port 8080): logins or signups. Open the Honeypot - Live Attacks dashboard for details."
+      - uid: attack-ftp
+        title: "Attack started: FTP/SMB honeypot (Dionaea)"
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: honeypot-pg
+            model:
+              refId: A
+              editorMode: code
+              format: time_series
+              rawQuery: true
+              rawSql: "SELECT now() AS time, count(*)::float AS attacks FROM events WHERE service = 'dionaea' AND event_time > now() - interval '1 minute'"
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              datasource:
+                type: __expr__
+                uid: __expr__
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 0
+              datasource:
+                type: __expr__
+                uid: __expr__
+              intervalMs: 1000
+              maxDataPoints: 43200
+        noDataState: OK
+        execErrState: OK
+        for: 0s
+        isPaused: false
+        labels:
+          service: dionaea
+        annotations:
+          summary: "Attack started: FTP/SMB honeypot (Dionaea)"
+          description: "Someone is attacking the fake FTP/SMB server (Dionaea, ports 2121/1445). Open the Honeypot - Live Attacks dashboard for details."

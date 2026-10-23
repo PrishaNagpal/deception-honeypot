@@ -1,0 +1,29 @@
+# Phone alerts: where Grafana sends the message.
+#
+# One contact point with two ways to reach a phone. Fill in ONE (or both) in .env:
+#   Discord   DISCORD_WEBHOOK_URL            (Discord app on the phone)
+#   Telegram  TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID   (Telegram app on the phone)
+# The one you leave empty gets a harmless placeholder from docker-compose.yml and
+# shows a "failed to send" line in `docker logs hp-grafana` when an alert fires;
+# the other one still delivers.
+#
+# Grafana replaces ${...} with the container's environment variables.
+# Setup steps are in README.md ("Phone alerts").
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: phone-alerts
+    receivers:
+      - uid: phone-discord
+        type: discord
+        disableResolveMessage: false
+        settings:
+          url: ${DISCORD_WEBHOOK_URL}
+          use_discord_username: false
+      - uid: phone-telegram
+        type: telegram
+        disableResolveMessage: false
+        settings:
+          bottoken: ${TELEGRAM_BOT_TOKEN}
+          chatid: ${TELEGRAM_CHAT_ID}

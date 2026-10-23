@@ -175,7 +175,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\n  event_time AS \"time\",\n  service,\n  event_type,\n  host(src_ip) AS src_ip,\n  username,\n  password,\n  command\nFROM events\nORDER BY event_time DESC\nLIMIT 20"
+          "rawSql": "SELECT\n  event_time AS \"time\",\n  service,\n  event_type,\n  host(src_ip) AS src_ip,\n  username,\n  password,\n  command,\n  array_to_string(tags, ', ') AS tags\nFROM events\nORDER BY event_time DESC\nLIMIT 20"
         }
       ]
     },
@@ -242,6 +242,201 @@
           "format": "table",
           "rawQuery": true,
           "rawSql": "SELECT\n  first_seen AS \"first seen\",\n  service,\n  left(sha256, 16) || '...' AS sha256,\n  file_path,\n  file_size AS bytes,\n  vt_malicious AS malicious,\n  vt_suspicious AS suspicious,\n  vt_threat_label AS label,\n  vt_checked_at AS \"checked at\"\nFROM malware_samples\nORDER BY first_seen DESC\nLIMIT 20"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "geomap",
+      "title": "Attacker origins (world map)",
+      "description": "Country of every public attacker IP, from AbuseIPDB. Bigger circle = more attacks.",
+      "gridPos": {
+        "h": 12,
+        "w": 15,
+        "x": 0,
+        "y": 36
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "honeypot-pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "No public attacker IPs yet. Lab attacks come from private addresses, which have no country. Run scripts/seed-demo-geo.sh for demo data."
+        },
+        "overrides": []
+      },
+      "options": {
+        "view": {
+          "id": "zero",
+          "lat": 20,
+          "lon": 0,
+          "zoom": 1.6,
+          "allLayers": true
+        },
+        "controls": {
+          "showZoom": true,
+          "mouseWheelZoom": true,
+          "showAttribution": true
+        },
+        "basemap": {
+          "type": "default",
+          "name": "Basemap"
+        },
+        "layers": [
+          {
+            "type": "geojson",
+            "name": "Countries",
+            "tooltip": false,
+            "config": {
+              "src": "public/maps/countries.geojson",
+              "rules": [],
+              "style": {
+                "color": {
+                  "fixed": "#5b6b7a"
+                },
+                "opacity": 0.35,
+                "lineWidth": 1,
+                "size": {
+                  "fixed": 5,
+                  "min": 2,
+                  "max": 15
+                },
+                "symbol": {
+                  "mode": "fixed",
+                  "fixed": "img/icons/marker/circle.svg"
+                },
+                "text": {
+                  "mode": "fixed",
+                  "fixed": ""
+                },
+                "textConfig": {
+                  "fontSize": 12
+                }
+              }
+            }
+          },
+          {
+            "type": "markers",
+            "name": "Attacks",
+            "tooltip": true,
+            "config": {
+              "showLegend": true,
+              "style": {
+                "size": {
+                  "field": "attacks",
+                  "min": 8,
+                  "max": 40,
+                  "fixed": 8
+                },
+                "color": {
+                  "fixed": "dark-red"
+                },
+                "opacity": 0.6,
+                "symbol": {
+                  "mode": "fixed",
+                  "fixed": "img/icons/marker/circle.svg"
+                },
+                "text": {
+                  "mode": "fixed",
+                  "fixed": ""
+                },
+                "textConfig": {
+                  "fontSize": 12
+                }
+              }
+            },
+            "location": {
+              "mode": "lookup",
+              "lookup": "country_code",
+              "gazetteer": "public/gazetteer/countries.json"
+            }
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "honeypot-pg"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  r.country_code,\n  max(r.country_name) AS country,\n  count(*) AS attacks,\n  count(DISTINCT e.src_ip) AS ips,\n  max(r.abuse_confidence_score) AS max_abuse_score\nFROM events e\nJOIN ip_reputation r ON r.ip = e.src_ip\nWHERE $__timeFilter(e.event_time)\n  AND r.is_public\n  AND r.country_code IS NOT NULL\nGROUP BY r.country_code\nORDER BY attacks DESC"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "table",
+      "title": "Attacks by country",
+      "gridPos": {
+        "h": 12,
+        "w": 9,
+        "x": 15,
+        "y": 36
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "honeypot-pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "No public attacker IPs yet"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "max_abuse_score"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 25
+                    },
+                    {
+                      "color": "red",
+                      "value": 75
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "honeypot-pg"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  r.country_code,\n  max(r.country_name) AS country,\n  count(*) AS attacks,\n  count(DISTINCT e.src_ip) AS ips,\n  max(r.abuse_confidence_score) AS max_abuse_score\nFROM events e\nJOIN ip_reputation r ON r.ip = e.src_ip\nWHERE $__timeFilter(e.event_time)\n  AND r.is_public\n  AND r.country_code IS NOT NULL\nGROUP BY r.country_code\nORDER BY attacks DESC"
         }
       ]
     }
